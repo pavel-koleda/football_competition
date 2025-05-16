@@ -1,0 +1,12 @@
+numpy~=2.2.1
+pandas~=2.2.3
+easydict~=1.13
+opencv-python~=4.10.0.84
+pillow~=11.1.0
+matplotlib~=3.10.0
+tqdm~=4.67.1
+pyarrow~=18.1.0
+neptune~=1.13.0
+mlflow~=2.20.2
+python-dotenv~=1.0.1
+seaborn~=0.13.2
