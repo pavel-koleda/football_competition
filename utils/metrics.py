@@ -18,8 +18,7 @@ def accuracy_score(targets: np.ndarray, predictions: np.ndarray) -> float:
         targets: The true labels.
         predictions: The predicted classes.
     """
-    # TODO: Implement calculation of accuracy
-    raise NotImplementedError
+    return np.mean(predictions == targets)
 
 
 def accuracy_score_per_class(targets: np.ndarray, predictions: np.ndarray) -> list[float]:
@@ -42,8 +41,13 @@ def accuracy_score_per_class(targets: np.ndarray, predictions: np.ndarray) -> li
         list[float]: Accuracy for each class.
     """
     accuracy_per_class = []
-    # TODO: Implement calculation of accuracy for each class using the formula from the docstring
-    raise NotImplementedError
+
+    for cls in np.unique(targets):
+        ind = targets == cls
+        accuracy_per_class.append(
+            np.mean(predictions[ind] == cls)
+        )
+    return accuracy_per_class
 
 
 def balanced_accuracy_score(targets: np.ndarray, predictions: np.ndarray) -> float:
@@ -65,8 +69,7 @@ def balanced_accuracy_score(targets: np.ndarray, predictions: np.ndarray) -> flo
         targets: The true labels.
         predictions: The predicted classes.
     """
-    # TODO: Implement calculation of balanced accuracy using the formula from the docstring
-    raise NotImplementedError
+    return np.mean(accuracy_score_per_class(targets, predictions))
 
 
 def confusion_matrix(targets: np.ndarray, predictions: np.ndarray, classes_num: Union[int, None] = None) -> np.ndarray:
@@ -83,5 +86,9 @@ def confusion_matrix(targets: np.ndarray, predictions: np.ndarray, classes_num: 
         predictions: The predicted classes.
         classes_num: The number of unique classes.
     """
-    # TODO: Implement calculation of confusion matrix using the formula from the docstring
-    raise NotImplementedError
+    if classes_num is None:
+        labels = np.unique(np.concatenate((targets, predictions)))
+        classes_num = len(labels)
+    cm = np.zeros((classes_num, classes_num), dtype=int)
+    np.add.at(cm, (targets, predictions), 1)
+    return cm

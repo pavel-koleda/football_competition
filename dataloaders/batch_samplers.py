@@ -3,10 +3,10 @@ from torch.utils.data import Sampler
 
 
 class Upsampling(Sampler):
-    """Upsampling Minority Class.
+    """A sampler upsampling minority class.
 
     Upsampling is a technique used to create additional data points of the minority class to balance class labels.
-        This is usually done by duplicating existing samples or creating new ones
+        This is usually done by duplicating existing samples or creating new ones.
     """
 
     def __init__(self, dataset):
@@ -21,15 +21,14 @@ class Upsampling(Sampler):
     def __iter__(self):
         indices = []
 
-        # TODO: To implement this method:
-        #       1. For each class in self.class_indices:
-        #           - Add all indices of the class elements to the indices list
-        #           - If the number of samples is less than the maximum number, randomly sample element indices
-        #               from this class so that the total number of indices equals the maximum number,
-        #               add sampled indices to the indices list
-        #       2. Shuffle indices (e.g. using np.random.permutation)
-        #       3. Return iterator of the gathered indices list (e.g. using iter method)
-        raise NotImplementedError
+        for label in self.class_indices.keys():
+            indices.extend(self.class_indices[label])
+            if len(self.class_indices[label]) < self.max_count:
+                num_indices_to_add = self.max_count - len(self.class_indices[label])
+                indices.extend(np.random.choice(self.class_indices[label], size=num_indices_to_add))
+
+        indices = np.random.permutation(indices)
+        return iter(indices)
 
     def __len__(self):
         return self.max_count * len(self.class_indices)

@@ -21,19 +21,15 @@ class EmotionsDataset(Dataset):
         # Filter the annotation file according to set_type
         self.annotation = annotation[annotation['set'] == self.set_type.name]
 
-        # TODO: Get image paths from annotation dataframe's 'path' column
-        self._paths = ...
-        # TODO: Make mapping from annotation dataframe's 'target' column to int values using self.config.label_mapping.
-        #       When set_type is SetType.test, the target does not exist.
-        self._targets = ...
+        self._paths = self.annotation['path'].tolist()
+        self._targets = self.annotation['target'].map(self.config.label_mapping).tolist()
 
     @property
     def labels(self):
         return self._targets
 
     def __len__(self):
-        # TODO: Return the number of samples in the dataset
-        raise NotImplementedError
+        return len(self._targets)
 
     def __getitem__(self, idx: int) -> dict:
         """Loads and returns one sample from a dataset with the given idx index.
@@ -46,10 +42,9 @@ class EmotionsDataset(Dataset):
                     'path': image path (str)
                 }
         """
-        # TODO: To implement the method:
-        #       1. Read the image with the provided index from the dataset by its path using PIL,
-        #               convert it to GRAYSCALE mode
-        #       2. Call the self.transforms functions for the image (if self.transforms is set up)
-        #       3. Return the image, the corresponding target and image path as a dictionary
-        #                with keys "image", "target", "path", respectively
-        raise NotImplementedError
+        image = Image.open(os.path.join(self.config.path_to_data, self._paths[idx])).convert('L')
+
+        if self.transforms is not None:
+            image = self.transforms(image)
+
+        return {'image': image, 'target': self._targets[idx], 'path': self._paths[idx]}

@@ -17,12 +17,7 @@ class MLP(nn.Module):
         Returns:
             nn.Sequential or nn.ModuleList with all the initialized layers
         """
-        # TODO: Make a sequence of layers using torch.nn modules and nn.Sequential:
-        #       - Make a list of layers initialized using getattr(nn, layer['type'].name)(**layer['params']),
-        #               for each layer from self.config.layers.
-        #       - Initialize torch.nn.Sequential class providing layers list items as positional arguments
-        #               (torch.nn.Sequential(layer_1, layer_2,...))
-        raise NotImplementedError
+        return nn.Sequential(*[getattr(nn, layer['type'].name)(**layer['params']) for layer in self.config.layers])
 
     @torch.no_grad()
     def _init_weights(self, module: nn.Module):
@@ -31,17 +26,14 @@ class MLP(nn.Module):
         Args:
             module: The model layer.
         """
-        #  TODO: Implement parameters initialization:
-        #        - Check if module is of nn.Linear type using isinstance(module, nn.Linear)
-        #        - if module is nn.Linear:
-        #               1. Call self.init_function to initialize weights: provide module.weight as positional argument
-        #                      and params from self.config.params.init_kwargs as keyword arguments
-        #               2. Initialize bias if module.bias is not None:
-        #                      - Use nn.init.zeros_() method if self.config.params.zero_bias is True
-        #                           or init method is either Xavier or He (kaiming)
-        #                      - Otherwise call self.init_function(), providing module.bias
-        #                           and self.config.params.init_kwargs in the same way as for the module.weight
-        raise NotImplementedError
+        if isinstance(module, nn.Linear):
+            self.init_function(module.weight, **self.config.params.init_kwargs)
+
+            if module.bias is not None:
+                if self.config.params.zero_bias or not self.init_function.__name__.startswith(('_normal', '_uniform')):
+                    nn.init.zeros_(module.bias)
+                else:
+                    self.init_function(module.bias, **self.config.params.init_kwargs)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         """Forward propagation implementation.
@@ -54,7 +46,5 @@ class MLP(nn.Module):
         Returns:
             torch.Tensor: A tensor of shape (batch_size, classes_num).
         """
-        # TODO: Implement forward pass:
-        #       1. Reshape inputs into a 2D tensor (first dimension is the mini-batch size) using inputs.view() method
-        #       2. Pass reshaped inputs through self.layers and return the result
-        raise NotImplementedError
+        inputs = inputs.view(inputs.size(0), -1)
+        return self.layers(inputs)

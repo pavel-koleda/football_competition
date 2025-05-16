@@ -1,18 +1,18 @@
 import os
-from tqdm import tqdm
 
 import numpy as np
 import torch
 from torch import nn
 from torch import optim
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from dataloaders.batch_samplers import Upsampling
 from dataset.emotions_dataset import EmotionsDataset
 from models.mlp import MLP
 from utils.common_functions import set_seed
 from utils.enums import SetType
-from utils.logger import NeptuneLogger
+from utils.logger import MLFlowLogger, NeptuneLogger
 from utils.metrics import balanced_accuracy_score, confusion_matrix
 from utils.visualization import plot_confusion_matrix
 
@@ -20,7 +20,7 @@ from utils.visualization import plot_confusion_matrix
 class Trainer:
     """A class for model training."""
 
-    def __init__(self, config, init_logger=True):
+    def __init__(self, config, init_logger: bool = True):
         self.config = config
         set_seed(self.config.seed)
 
@@ -84,7 +84,7 @@ class Trainer:
             best_metric = valid_metric
         return best_metric
 
-    def make_step(self, batch: dict, update_model=False) -> (float, np.ndarray):
+    def make_step(self, batch: dict, update_model: bool = False) -> (float, np.ndarray):
         """This method performs one step, including forward pass, calculation of the target function, backward
         pass and updating the model weights (if update_model is True).
 
@@ -96,15 +96,18 @@ class Trainer:
             loss: The loss function value.
             output: The model output (batch_size x classes_num).
         """
-        # TODO: Implement one step of forward and backward propagation:
-        #       1. Get images and targets from batch, "move" them to self.device
-        #       2. Get model output by passing batch images through the model instance
-        #       3. Compute loss with self.criterion using batch targets and obtained model output
-        #       4. If update_model parameter is True, make backward propagation:
-        #           - Set the gradient of the layer parameters to zero using self.optimizer.zero_grad()
-        #           - Compute the gradient of the computed loss using its backward() method
-        #           - Update the model parameters using self.optimizer.step()
-        raise NotImplementedError
+        images = batch['image'].to(self.device)
+        targets = batch['target'].to(self.device)
+
+        output = self.model(images)
+        loss = self.criterion(output, targets)
+
+        if update_model:
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+        return loss.item(), output.detach().cpu().numpy()
 
     def train_epoch(self):
         """Trains the model on training data for one epoch.
@@ -113,33 +116,37 @@ class Trainer:
         """
         self.model.train()
         pbar = tqdm(self.train_dataloader)
-        # TODO: Implement the training process for one epoch. For all batches in train_dataloader (pbar) do:
-        #       1. Make training step by calling self.make_step() method on a batch with update_model=True
-        #       2. Get the model predictions from the outputs using argmax() method with correct axis
-        #       3. Compute metrics using batch targets and obtained model predictions
-        #       4. Log the calculated loss value and metrics with self.logger.save_metrics() and correct SetType name
-        #       5. (Optional) Update tqdm progress bar state (e. g. with pbar.set_description() method)
-        #               with current loss and metric values
-        raise NotImplementedError
+
+        for batch in pbar:
+            loss, output = self.make_step(batch, update_model=True)
+
+            predictions = output.argmax(axis=-1)
+            balanced_accuracy = balanced_accuracy_score(batch['target'].numpy(), predictions)
+
+            self.logger.save_metrics(SetType.train.name, 'loss', loss)
+            self.logger.save_metrics(SetType.train.name, 'balanced_accuracy', balanced_accuracy)
+            pbar.set_description(f'Loss: {loss:.4f}, Train balanced accuracy: {balanced_accuracy:.4f}')
 
     def fit(self):
         """The main model training loop."""
         best_metric = 0
         start_epoch = 0
-        # TODO: Implement the main model training loop iterating over the epochs. First, check whether it is necessary
-        #           to continue the previous training experiment using self.config.train.continue_train parameter. If
-        #           the condition is met, get the epoch where the experiment was stopped from
-        #           self.config.train.checkpoint_from_epoch. Load the model from this epoch using self.load() method,
-        #           and set start_epoch to the obtained epoch + 1
-        #       Then at each epoch starting from the start_epoch and ending at self.config.num_epochs:
-        #           1. The model is first trained on the training data using the self.train_epoch() method
-        #           2. The model performance is then evaluated on the train (self.eval_train_dataloader) and validation
-        #                   (self.validation_dataloader) data with self.evaluate() method
-        #           3. The model is saved if needed (check self.config.checkpoint_save_frequency)
-        #           4. If performance metrics on the validation data exceeds the best values achieved,
-        #                   model parameters should be saved with save() method (call self.update_best_params() method
-        #                   and update best_metric value)
-        raise NotImplementedError
+
+        if self.config.train.continue_train:
+            epoch = self.config.train.checkpoint_from_epoch
+            self.load(self.config.checkpoint_name % epoch)
+            start_epoch = epoch + 1
+
+        for epoch in range(start_epoch, self.config.num_epochs):
+            self.train_epoch()
+
+            self.evaluate(epoch, self.eval_train_dataloader, SetType.train)
+            valid_metric = self.evaluate(epoch, self.validation_dataloader, SetType.validation)
+
+            if epoch % self.config.checkpoint_save_frequency == 0:
+                self.save(self.config.checkpoint_name % epoch)
+
+            best_metric = self.update_best_params(valid_metric, best_metric)
 
     @torch.no_grad()
     def evaluate(self, epoch: int, dataloader: DataLoader, set_type: SetType) -> float:
@@ -156,15 +163,31 @@ class Trainer:
 
         total_loss = []
         all_outputs, all_labels = [], []
-        # TODO: To implement the model performance evaluation for each batch in the given dataloader do:
-        #       1. Make model forward pass using self.make_step(batch, update_model=False)
-        #       2. Add loss value to total_loss list
-        #       3. Add model output to all_outputs list
-        #       4. Add batch targets to all_labels list
-        #    Get total loss (by averaging gathered losses) and metrics values (using gathered outputs to get
-        #           predictions with argmax), log them with logger. You can also make CM using plot_confusion_matrix()
-        #           method and log it using self.logger.save_plot. Return calculated metric value
-        raise NotImplementedError
+
+        for batch in dataloader:
+            loss, output = self.make_step(batch, update_model=False)
+
+            total_loss.append(loss)
+            all_outputs.append(output)
+            all_labels.append(batch['target'].numpy())
+
+        total_loss = np.mean(total_loss)
+        all_predictions = np.concatenate(all_outputs).argmax(axis=-1)
+        all_targets = np.concatenate(all_labels)
+
+        balanced_accuracy = balanced_accuracy_score(all_targets, all_predictions)
+
+        cm_plot = plot_confusion_matrix(
+            confusion_matrix(all_targets, all_predictions, self.config.data.classes_num),
+            title=f'Confusion matrix (epoch {epoch})',
+            class_labels=list(self.config.data.label_mapping.keys())
+        )
+
+        self.logger.save_metrics('eval_' + set_type.name, 'loss', total_loss)
+        self.logger.save_metrics('eval_' + set_type.name, 'balanced_accuracy', balanced_accuracy)
+        self.logger.save_plot('eval_' + set_type.name, 'confusion_matrix', cm_plot)
+
+        return balanced_accuracy
 
     @torch.no_grad()
     def predict(self, model_path: str, dataloader: DataLoader) -> (list, list):
@@ -172,13 +195,16 @@ class Trainer:
         self.load(model_path)
         self.model.eval()
         all_outputs, all_image_paths = [], []
-        # TODO: To implement this method, for each batch in the given dataloader do:
-        #       1. Add batch image paths to all_image_paths list
-        #       2. Get the model output for the batch images (don't forget to move batch images to self.device)
-        #       3. Add model output to all_outputs list
-        #       Get predictions using gathered model outputs and argmax method and return concatenated predictions
-        #               and image paths as a result
-        raise NotImplementedError
+
+        for batch in dataloader:
+            all_image_paths.extend(batch['path'])
+
+            output = self.model(batch['image'].to(self.device))
+            all_outputs.append(output)
+
+        all_predictions = torch.cat(all_outputs).argmax(-1)
+
+        return all_predictions.tolist(), all_image_paths
 
     def batch_overfit(self):
         """One batch overfitting.
@@ -187,8 +213,10 @@ class Trainer:
         """
         self.model.train()
         batch = next(iter(self.train_dataloader))
-        # TODO: To implement this method, for each iteration from 0 to self.config.overfit.num_iterations:
-        #       1. Make model forward pass using self.make_step(batch, update_model=True)
-        #       2. Get metric value using batch targets and predictions from the obtained model output
-        #       3. Log calculated loss and metric values via self.logger.save_metrics
-        raise NotImplementedError
+
+        for _ in range(self.config.overfit.num_iterations):
+            loss_value, output = self.make_step(batch, update_model=True)
+            balanced_accuracy = balanced_accuracy_score(batch['target'], output.argmax(-1))
+
+            self.logger.save_metrics(SetType.train.name, 'loss', loss_value)
+            self.logger.save_metrics(SetType.train.name, 'balanced_accuracy', balanced_accuracy)
