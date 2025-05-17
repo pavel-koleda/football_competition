@@ -21,19 +21,25 @@ class FootballDataset(Dataset):
         teams = read_dataframe_file(os.path.join(config.path_to_data, 'teams.pickle'))
 
         self.fill_matches_missing_values(matches)
-        self.ohe_features_encode(self.config.categories, matches, players, teams)
 
-        self.drop_matches_columns(matches)
-        
+        players = self.drop_players_columns(players)
+        players['birthday_year'] = players['birthday_gmt'].apply(lambda x: int(x.split('/')[0]))
+        players = players.drop(columns=['birthday_gmt'])
+
+        matches = self.drop_matches_columns(matches)
+        matches = self.drop_matches_2013_season(matches)
+
         self.add_season_start_end_index(matches, players, teams)
-        
         matches = self.add_players_info(matches, players)
-        self.add_teams_info(matches, teams)
+        matches = self.add_teams_info(matches, teams)
         
+        matches = self.ohe_features_encode(self.config.categories, matches)
+       
         if self.set_type.name != 'test':
-            self._targets = self.matches['match_result'].map(self.config.label_mapping).tolist() 
-
-        self._inputs = matches.to_numpy()
+            self._targets = matches['match_result'].map(self.config.label_mapping).tolist() 
+            matches = matches.drop(columns=['match_result'])
+        
+        self._inputs = matches.to_numpy(dtype='float')
 
 
     def fill_matches_missing_values(self, matches):
@@ -43,19 +49,16 @@ class FootballDataset(Dataset):
         matches['game week'] = matches['game week'].fillna(matches['game week'].mean())
 
 
-    def ohe_features_encode(self, categories: dict, *args: pd.DataFrame):
-        for df in args:
-            ohe_columns = []
-            
-            for category in categories:
-                if category in df.columns:
-                    df[category] = pd.Categorical(df[category], categories=categories[category], ordered=True)
-                    ohe_columns.append(category)
-                    
-            if len(ohe_columns) > 0:
-                dummies = pd.get_dummies(df, columns=ohe_columns)
-                df[dummies.columns] = dummies
-                df.drop(columns=ohe_columns, inplace=True)
+    def ohe_features_encode(self, categories: dict, df: pd.DataFrame) -> pd.DataFrame:
+        
+        for category in categories:
+            matching_features = [col for col in df.columns if col.startswith(category)]
+            if len(matching_features) > 0:
+                for feature in matching_features:
+                    df[feature] = pd.Categorical(df[feature], categories=categories[category], ordered=True)
+                df = pd.get_dummies(df, columns=matching_features)
+
+        return df
 
 
     def add_season_start_end_index(self, *args):
@@ -65,30 +68,81 @@ class FootballDataset(Dataset):
             df.drop(columns='season', inplace=True)
 
 
-    def drop_matches_columns(self, matches):
-        matches.drop(columns=['home_team_name', 
-                              'away_team_name', 
-                              'home_team_bench_players', 
-                              'away_team_bench_players', 
-                              'attendance', 
-                              'referee',
-                              'timestamp'], inplace=True)
+    def drop_matches_columns(self, matches) -> pd.DataFrame:
+        matches = matches.drop(columns=['home_team_name', 
+                                        'away_team_name', 
+                                        'home_team_bench_players', 
+                                        'away_team_bench_players', 
+                                        'attendance', 
+                                        'referee',
+                                        'timestamp'])
 
         if self.set_type.name != 'test':
-            matches.drop(columns=['home_team_goal_count',
-                                  'away_team_goal_count',
-                                  'total_goal_count',
-                                  'total_goals_at_half_time'], inplace=True)
+            matches = matches.drop(columns=['home_team_goal_count',
+                                            'away_team_goal_count',
+                                            'total_goal_count',
+                                            'total_goals_at_half_time'])
+            
+        return matches
+
+    def drop_players_columns(self, players) -> pd.DataFrame:
+        return players.drop(columns=['full_name',
+                                     'team',
+                                     'code',
+                                     'nationality'])
 
 
-    def add_players_info(self, matches, players) -> pd.DataFrame:
+    def drop_matches_2013_season(self, matches) -> pd.DataFrame:
+        return matches.loc[matches['season'] != '2013/2014']
+
+    
+    def add_players_info(self, matches, players: pd.DataFrame) -> pd.DataFrame:
+        """Получаю статистику игрока из предыдущего сезона
+           Для этого создаю отдельные колонки с идентификаторами игроков
+           Затем мержу данные из второй таблицы по условию совпадения идентификатора, лиги, начало текущего сезона = окончание предыдущего"""
+        
+        home_players_columns = matches['home_team_main_players'].apply(pd.Series)
+        home_players_columns.columns = ["home_player_" + str(i+1) for i in range(home_players_columns.shape[1])]
+        result_df = pd.concat([matches.drop(columns=['home_team_main_players']), home_players_columns], axis=1)
+
+        away_players_columns = result_df['away_team_main_players'].apply(pd.Series)
+        away_players_columns.columns = ["away_player_" + str(i+1) for i in range(away_players_columns.shape[1])]
+        result_df = pd.concat([result_df.drop(columns=['away_team_main_players']), away_players_columns], axis=1)
+
+        players = players.drop(columns=['season_start'])
+
+        for i in range(11):
+            result_df = result_df.merge(players, 
+                                        how='left', 
+                                        left_on=[f'home_player_{i+1}', 'season_start', 'home_team_id', 'league'], 
+                                        right_on=['id', 'season_end', 'team_id', 'league'],
+                                        suffixes=('',f'_home_player{i+1}')
+                                        ).drop(columns=[f'season_end_home_player{i+1}', f'id_home_player{i+1}'])
+
+        for i in range(11):
+            result_df = result_df.merge(players, 
+                            how='left', 
+                            left_on=[f'away_player_{i+1}', 'season_start', 'away_team_id', 'league'], 
+                            right_on=['id', 'season_end', 'team_id', 'league'],
+                            suffixes=('',f'_away_player{i+1}')
+                            ).drop(columns=[f'season_end_away_player{i+1}', f'id_away_player{i+1}'])
+
+        #TODO: нужно заполнить либо данными команды (но есть примеры, когда информация о всей команде в игроках отсутствует), либо чем-то более осмысленным
+        #NaN также может быть из-за ошибки в данных, например в players не заполнен id команды, но таких всего около 80 записей
+
+        numerical_features = result_df.select_dtypes(include=['number'])
+        mean_values = numerical_features.mean()
+        result_df[numerical_features.columns] = result_df[numerical_features.columns].fillna(mean_values)
+        
+        #TODO: доработать позиции и порядок игроков по совсем неизвестным игрокам по умолчанию воткну midfielder
+        result_df['position'] = result_df['position'].fillna('Midfielder')
+
+        return result_df
+
+
+    def add_teams_info(self, matches, players) -> pd.DataFrame:
         #заменяем id команды информацией о ней
-        raise NotImplementedError
-
-
-    def add_teams_info(self, matches, players):
-        #заменяем id команды информацией о ней
-        raise NotImplementedError
+        return matches
 
 
     @property
@@ -110,7 +164,7 @@ class FootballDataset(Dataset):
                     'target': target (int)
                 }
         """
-        input = self.inputs[idx]
+        input = self._inputs[idx]
 
         if self.transforms is not None:
             input = self.transforms(input)
