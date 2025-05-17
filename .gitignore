@@ -27,4 +27,5 @@ experiments
 
 test.ipynb
 
+.lock
 *.csv
