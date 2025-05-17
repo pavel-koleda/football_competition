@@ -1,7 +1,8 @@
 import os
 
 from easydict import EasyDict
-from torchvision import transforms
+
+from utils.enums import PreprocessingType
 
 ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
 
@@ -73,13 +74,5 @@ data_cfg.categories = {
 }
 
 # Training configuration
-data_cfg.train_transforms = transforms.Compose([
-    transforms.Resize((32, 32)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=(0.5,), std=(0.5,))
-])
-data_cfg.eval_transforms = transforms.Compose([
-    transforms.Resize((32, 32)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=(0.5,), std=(0.5,))
-])
+data_cfg.preprocess_type = PreprocessingType.standardization
+# data_cfg.preprocess_type = PreprocessingType.normalization

@@ -47,4 +47,4 @@ class EmotionsDataset(Dataset):
         if self.transforms is not None:
             image = self.transforms(image)
 
-        return {'image': image, 'target': self._targets[idx], 'path': self._paths[idx]}
+        return {'input': image, 'target': self._targets[idx], 'path': self._paths[idx]}

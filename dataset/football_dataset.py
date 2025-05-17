@@ -1,10 +1,12 @@
 import os
-import pandas as pd
 
+import numpy as np
+import pandas as pd
 from torch.utils.data import Dataset
 
 from utils.common_functions import read_dataframe_file
 from utils.enums import SetType
+from utils.preprocessing import Preprocessing
 
 
 class FootballDataset(Dataset):
@@ -15,6 +17,9 @@ class FootballDataset(Dataset):
         self.config = config
         self.set_type = set_type
         self.transforms = transforms
+
+        # Preprocessing class initialization
+        self.preprocessing = Preprocessing(config.preprocess_type)
 
         matches = read_dataframe_file(os.path.join(config.path_to_data, f'matches_{self.set_type.name}.pickle'))
         players = read_dataframe_file(os.path.join(config.path_to_data, 'players.pickle'))
@@ -36,10 +41,14 @@ class FootballDataset(Dataset):
         matches = self.ohe_features_encode(self.config.categories, matches)
        
         if self.set_type.name != 'test':
-            self._targets = matches['match_result'].map(self.config.label_mapping).tolist() 
+            self._targets = matches['match_result'].map(self.config.label_mapping).to_numpy()
             matches = matches.drop(columns=['match_result'])
-        
-        self._inputs = matches.to_numpy(dtype='float')
+
+        matches = matches.to_numpy(dtype='float')
+
+        matches = self.preprocessing.train(matches)
+
+        self._inputs = matches
 
 
     def fill_matches_missing_values(self, matches):
@@ -169,4 +178,7 @@ class FootballDataset(Dataset):
         if self.transforms is not None:
             input = self.transforms(input)
 
-        return {'input': input, 'target': self._targets[idx]}
+        if self.set_type.name != 'test':
+            return {'input': input.astype(np.float32), 'target': self._targets[idx]}
+        else:
+            return {'input': input}

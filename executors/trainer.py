@@ -2,8 +2,7 @@ import os
 
 import numpy as np
 import torch
-from torch import nn
-from torch import optim
+from torch import nn, optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -27,7 +26,7 @@ class Trainer:
         self._prepare_data()
         self._prepare_model()
 
-        self._init_logger(init_logger)
+        # self._init_logger(init_logger)
 
     def _init_logger(self, init_logger: bool):
         if init_logger:
@@ -40,17 +39,17 @@ class Trainer:
         data_cfg = self.config.data
         batch_size = self.config.train.batch_size
 
-        train_transforms = data_cfg.train_transforms
-        validation_transforms = data_cfg.eval_transforms
+        # train_transforms = data_cfg.train_transforms
+        # validation_transforms = data_cfg.eval_transforms
 
-        self.train_dataset = FootballDataset(data_cfg, SetType.train, transforms=train_transforms)
+        self.train_dataset = FootballDataset(data_cfg, SetType.train, transforms=None)
         self.train_dataloader = DataLoader(
             self.train_dataset, batch_size, drop_last=True, sampler=Upsampling(self.train_dataset),
             num_workers=os.cpu_count(),
         )
         self.eval_train_dataloader = DataLoader(self.train_dataset, batch_size, shuffle=False)
 
-        self.validation_dataset = FootballDataset(data_cfg, SetType.validation, transforms=validation_transforms)
+        self.validation_dataset = FootballDataset(data_cfg, SetType.validation, transforms=None)
         self.validation_dataloader = DataLoader(self.validation_dataset, batch_size=batch_size, shuffle=False)
 
     def _prepare_model(self):
@@ -96,10 +95,14 @@ class Trainer:
             loss: The loss function value.
             output: The model output (batch_size x classes_num).
         """
-        images = batch['image'].to(self.device)
+        inputs = batch['input'].to(self.device)
         targets = batch['target'].to(self.device)
 
-        output = self.model(images)
+        if torch.isnan(inputs).any():
+            print("Входные данные содержат NaN значения")
+            inputs = torch.nan_to_num(inputs, nan=0.0)
+
+        output = self.model(inputs)
         loss = self.criterion(output, targets)
 
         if update_model:
@@ -116,36 +119,30 @@ class Trainer:
         """
         self.model.train()
         pbar = tqdm(self.train_dataloader)
-
         for batch in pbar:
             loss, output = self.make_step(batch, update_model=True)
 
             predictions = output.argmax(axis=-1)
             balanced_accuracy = balanced_accuracy_score(batch['target'].numpy(), predictions)
 
-            self.logger.save_metrics(SetType.train.name, 'loss', loss)
-            self.logger.save_metrics(SetType.train.name, 'balanced_accuracy', balanced_accuracy)
+            # self.logger.save_metrics(SetType.train.name, 'loss', loss)
+            # self.logger.save_metrics(SetType.train.name, 'balanced_accuracy', balanced_accuracy)
             pbar.set_description(f'Loss: {loss:.4f}, Train balanced accuracy: {balanced_accuracy:.4f}')
 
     def fit(self):
         """The main model training loop."""
         best_metric = 0
         start_epoch = 0
-
         if self.config.train.continue_train:
             epoch = self.config.train.checkpoint_from_epoch
             self.load(self.config.checkpoint_name % epoch)
             start_epoch = epoch + 1
-
         for epoch in range(start_epoch, self.config.num_epochs):
             self.train_epoch()
-
             self.evaluate(epoch, self.eval_train_dataloader, SetType.train)
             valid_metric = self.evaluate(epoch, self.validation_dataloader, SetType.validation)
-
             if epoch % self.config.checkpoint_save_frequency == 0:
                 self.save(self.config.checkpoint_name % epoch)
-
             best_metric = self.update_best_params(valid_metric, best_metric)
 
     @torch.no_grad()
@@ -183,9 +180,9 @@ class Trainer:
             class_labels=list(self.config.data.label_mapping.keys())
         )
 
-        self.logger.save_metrics('eval_' + set_type.name, 'loss', total_loss)
-        self.logger.save_metrics('eval_' + set_type.name, 'balanced_accuracy', balanced_accuracy)
-        self.logger.save_plot('eval_' + set_type.name, 'confusion_matrix', cm_plot)
+        # self.logger.save_metrics('eval_' + set_type.name, 'loss', total_loss)
+        # self.logger.save_metrics('eval_' + set_type.name, 'balanced_accuracy', balanced_accuracy)
+        # self.logger.save_plot('eval_' + set_type.name, 'confusion_matrix', cm_plot)
 
         return balanced_accuracy
 
@@ -194,17 +191,16 @@ class Trainer:
         """Gets model predictions for a given dataloader."""
         self.load(model_path)
         self.model.eval()
-        all_outputs, all_image_paths = [], []
+        all_outputs = []
 
         for batch in dataloader:
-            all_image_paths.extend(batch['path'])
 
-            output = self.model(batch['image'].to(self.device))
+            output = self.model(batch['input'].to(self.device))
             all_outputs.append(output)
 
         all_predictions = torch.cat(all_outputs).argmax(-1)
 
-        return all_predictions.tolist(), all_image_paths
+        return all_predictions.tolist()
 
     def batch_overfit(self):
         """One batch overfitting.
@@ -217,6 +213,6 @@ class Trainer:
         for _ in range(self.config.overfit.num_iterations):
             loss_value, output = self.make_step(batch, update_model=True)
             balanced_accuracy = balanced_accuracy_score(batch['target'], output.argmax(-1))
-
-            self.logger.save_metrics(SetType.train.name, 'loss', loss_value)
-            self.logger.save_metrics(SetType.train.name, 'balanced_accuracy', balanced_accuracy)
+            print(f"{loss_value}, {balanced_accuracy}")
+            # self.logger.save_metrics(SetType.train.name, 'loss', loss_value)
+            # self.logger.save_metrics(SetType.train.name, 'balanced_accuracy', balanced_accuracy)

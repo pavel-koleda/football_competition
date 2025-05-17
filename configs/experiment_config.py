@@ -25,7 +25,16 @@ experiment_cfg.overfit.num_iterations = 500
 # Neptune parameters
 experiment_cfg.neptune = EasyDict()
 experiment_cfg.neptune.env_path = os.path.join(ROOT_DIR, '.env')
-experiment_cfg.neptune.project = ''
+experiment_cfg.neptune.project = 'Emotions-detection/emotion-detection'
+experiment_cfg.neptune.experiment_name = 'ьфеср_зкувшсешщт_run_1'
+experiment_cfg.neptune.run_id = None #None #'EM-65'
+experiment_cfg.neptune.dependencies_path = os.path.join(ROOT_DIR, 'requirements.txt')
+
+
+# Neptune parameters
+experiment_cfg.neptune = EasyDict()
+experiment_cfg.neptune.env_path = os.path.join(ROOT_DIR, '.env')
+experiment_cfg.neptune.project = 'Emotions-detection/emotion-detection'
 experiment_cfg.neptune.experiment_name = ''
 experiment_cfg.neptune.run_id = None
 experiment_cfg.neptune.dependencies_path = os.path.join(ROOT_DIR, 'requirements.txt')
