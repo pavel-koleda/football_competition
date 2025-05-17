@@ -26,7 +26,7 @@ class Trainer:
         self._prepare_data()
         self._prepare_model()
 
-        # self._init_logger(init_logger)
+        self._init_logger(init_logger)
 
     def _init_logger(self, init_logger: bool):
         if init_logger:
@@ -43,9 +43,10 @@ class Trainer:
         # validation_transforms = data_cfg.eval_transforms
 
         self.train_dataset = FootballDataset(data_cfg, SetType.train, transforms=None)
+
         self.train_dataloader = DataLoader(
             self.train_dataset, batch_size, drop_last=True, sampler=Upsampling(self.train_dataset),
-            num_workers=os.cpu_count(),
+            num_workers=os.cpu_count(), persistent_workers=True, prefetch_factor=2,
         )
         self.eval_train_dataloader = DataLoader(self.train_dataset, batch_size, shuffle=False)
 
@@ -118,15 +119,16 @@ class Trainer:
         The method goes through all train_dataloader batches and calls the self.make_step() method at each step.
         """
         self.model.train()
-        pbar = tqdm(self.train_dataloader)
+        total_batches = len(self.train_dataloader)
+        pbar = tqdm(self.train_dataloader, total=total_batches)
         for batch in pbar:
             loss, output = self.make_step(batch, update_model=True)
 
             predictions = output.argmax(axis=-1)
             balanced_accuracy = balanced_accuracy_score(batch['target'].numpy(), predictions)
 
-            # self.logger.save_metrics(SetType.train.name, 'loss', loss)
-            # self.logger.save_metrics(SetType.train.name, 'balanced_accuracy', balanced_accuracy)
+            self.logger.save_metrics(SetType.train.name, 'loss', loss)
+            self.logger.save_metrics(SetType.train.name, 'balanced_accuracy', balanced_accuracy)
             pbar.set_description(f'Loss: {loss:.4f}, Train balanced accuracy: {balanced_accuracy:.4f}')
 
     def fit(self):
@@ -180,9 +182,9 @@ class Trainer:
             class_labels=list(self.config.data.label_mapping.keys())
         )
 
-        # self.logger.save_metrics('eval_' + set_type.name, 'loss', total_loss)
-        # self.logger.save_metrics('eval_' + set_type.name, 'balanced_accuracy', balanced_accuracy)
-        # self.logger.save_plot('eval_' + set_type.name, 'confusion_matrix', cm_plot)
+        self.logger.save_metrics('eval_' + set_type.name, 'loss', total_loss)
+        self.logger.save_metrics('eval_' + set_type.name, 'balanced_accuracy', balanced_accuracy)
+        self.logger.save_plot('eval_' + set_type.name, 'confusion_matrix', cm_plot)
 
         return balanced_accuracy
 
@@ -214,5 +216,5 @@ class Trainer:
             loss_value, output = self.make_step(batch, update_model=True)
             balanced_accuracy = balanced_accuracy_score(batch['target'], output.argmax(-1))
             print(f"{loss_value}, {balanced_accuracy}")
-            # self.logger.save_metrics(SetType.train.name, 'loss', loss_value)
-            # self.logger.save_metrics(SetType.train.name, 'balanced_accuracy', balanced_accuracy)
+            self.logger.save_metrics(SetType.train.name, 'loss', loss_value)
+            self.logger.save_metrics(SetType.train.name, 'balanced_accuracy', balanced_accuracy)

@@ -13,8 +13,8 @@ experiment_cfg.num_epochs = 100
 
 # Train parameters
 experiment_cfg.train = EasyDict()
-experiment_cfg.train.batch_size = 64
-experiment_cfg.train.learning_rate = 1e-2
+experiment_cfg.train.batch_size = 1024
+experiment_cfg.train.learning_rate = 1e-3
 experiment_cfg.train.continue_train = False
 experiment_cfg.train.checkpoint_from_epoch = None
 
@@ -26,7 +26,7 @@ experiment_cfg.overfit.num_iterations = 500
 experiment_cfg.neptune = EasyDict()
 experiment_cfg.neptune.env_path = os.path.join(ROOT_DIR, '.env')
 experiment_cfg.neptune.project = 'Emotions-detection/emotion-detection'
-experiment_cfg.neptune.experiment_name = 'ьфеср_зкувшсешщт_run_1'
+experiment_cfg.neptune.experiment_name = 'football_prediction_run_1'
 experiment_cfg.neptune.run_id = None #None #'EM-65'
 experiment_cfg.neptune.dependencies_path = os.path.join(ROOT_DIR, 'requirements.txt')
 
