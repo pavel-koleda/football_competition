@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader
 
 from configs.data_config import data_cfg
 from configs.experiment_config import experiment_cfg
-from dataset.emotions_dataset import EmotionsDataset
+from dataset.football_dataset import FootballDataset
 from executors.trainer import Trainer
 from utils.enums import SetType
 
@@ -22,7 +22,7 @@ def predict():
     trainer = Trainer(experiment_cfg, init_logger=False)
 
     # Get data to make predictions on
-    test_dataset = EmotionsDataset(data_cfg, SetType.test, transforms=data_cfg.eval_transforms)
+    test_dataset = FootballDataset(data_cfg, SetType.test, transforms=data_cfg.eval_transforms)
     test_dataloader = DataLoader(test_dataset, experiment_cfg.train.batch_size, shuffle=False)
 
     # Get predictions

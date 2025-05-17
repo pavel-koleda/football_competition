@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataloaders.batch_samplers import Upsampling
-from dataset.emotions_dataset import EmotionsDataset
+from dataset.football_dataset import FootballDataset
 from models.mlp import MLP
 from utils.common_functions import set_seed
 from utils.enums import SetType
@@ -43,14 +43,14 @@ class Trainer:
         train_transforms = data_cfg.train_transforms
         validation_transforms = data_cfg.eval_transforms
 
-        self.train_dataset = EmotionsDataset(data_cfg, SetType.train, transforms=train_transforms)
+        self.train_dataset = FootballDataset(data_cfg, SetType.train, transforms=train_transforms)
         self.train_dataloader = DataLoader(
             self.train_dataset, batch_size, drop_last=True, sampler=Upsampling(self.train_dataset),
             num_workers=os.cpu_count(),
         )
         self.eval_train_dataloader = DataLoader(self.train_dataset, batch_size, shuffle=False)
 
-        self.validation_dataset = EmotionsDataset(data_cfg, SetType.validation, transforms=validation_transforms)
+        self.validation_dataset = FootballDataset(data_cfg, SetType.validation, transforms=validation_transforms)
         self.validation_dataloader = DataLoader(self.validation_dataset, batch_size=batch_size, shuffle=False)
 
     def _prepare_model(self):
