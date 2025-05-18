@@ -110,6 +110,8 @@ class FootballDataset(Dataset):
            Для этого создаю отдельные колонки с идентификаторами игроков
            Затем мержу данные из второй таблицы по условию совпадения идентификатора, лиги, начало текущего сезона = окончание предыдущего"""
         
+        player_positions = dict(players.drop_duplicates(subset='id')[['id', 'position']].values)
+
         home_players_columns = matches['home_team_main_players'].apply(pd.Series)
         home_players_columns.columns = ["home_player_" + str(i+1) for i in range(home_players_columns.shape[1])]
         result_df = pd.concat([matches.drop(columns=['home_team_main_players']), home_players_columns], axis=1)
@@ -125,16 +127,23 @@ class FootballDataset(Dataset):
                                         how='left', 
                                         left_on=[f'home_player_{i+1}', 'season_start', 'home_team_id', 'league'], 
                                         right_on=['id', 'season_end', 'team_id', 'league'],
-                                        suffixes=('',f'_home_player{i+1}')
-                                        ).drop(columns=[f'season_end_home_player{i+1}', f'id_home_player{i+1}'])
+                                        suffixes=('',f'_home_player{i+1}'))
+            
+
+            #Для первой записи суффикс в поле position будет отсутствовать, поэтому так
+            position_field = 'position' if i == 0 else f'position_home_player{i + 1}'
+            result_df[position_field] = result_df[position_field].fillna(result_df[f'home_player_{i+1}'].map(player_positions))                
+            result_df = result_df.drop(columns=[f'season_end_home_player{i+1}', f'id_home_player{i+1}'])
 
         for i in range(11):
             result_df = result_df.merge(players, 
                             how='left', 
                             left_on=[f'away_player_{i+1}', 'season_start', 'away_team_id', 'league'], 
                             right_on=['id', 'season_end', 'team_id', 'league'],
-                            suffixes=('',f'_away_player{i+1}')
-                            ).drop(columns=[f'season_end_away_player{i+1}', f'id_away_player{i+1}'])
+                            suffixes=('',f'_away_player{i+1}'))
+            
+            result_df[f'position_away_player{i+1}'] = result_df[f'position_away_player{i+1}'].fillna(result_df[f'away_player_{i+1}'].map(player_positions)) 
+            result_df = result_df.drop(columns=[f'season_end_away_player{i+1}', f'id_away_player{i+1}'])
 
         #TODO: нужно заполнить либо данными команды (но есть примеры, когда информация о всей команде в игроках отсутствует), либо чем-то более осмысленным
         #NaN также может быть из-за ошибки в данных, например в players не заполнен id команды, но таких всего около 80 записей
@@ -142,9 +151,6 @@ class FootballDataset(Dataset):
         numerical_features = result_df.select_dtypes(include=['number'])
         mean_values = numerical_features.mean()
         result_df[numerical_features.columns] = result_df[numerical_features.columns].fillna(mean_values)
-        
-        #TODO: доработать позиции и порядок игроков по совсем неизвестным игрокам по умолчанию воткну midfielder
-        result_df['position'] = result_df['position'].fillna('Midfielder')
 
         return result_df
 
