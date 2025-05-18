@@ -44,6 +44,8 @@ class FootballDataset(Dataset):
             self._targets = matches['match_result'].map(self.config.label_mapping).to_numpy()
             matches = matches.drop(columns=['match_result'])
 
+        matches = matches.fillna(0)
+        
         matches = matches.to_numpy(dtype='float')
 
         matches = self.preprocessing.train(matches)
@@ -155,9 +157,34 @@ class FootballDataset(Dataset):
         return result_df
 
 
-    def add_teams_info(self, matches, players) -> pd.DataFrame:
+    def add_teams_info(self, matches, teams) -> pd.DataFrame:
         #заменяем id команды информацией о ней
-        return matches
+        result_df = matches.merge(teams, 
+                    how='left', 
+                    left_on=['home_team_id', 'season_start', 'league'], 
+                    right_on=['id', 'season_end', 'league'],
+                    suffixes=('', '_home_team'))
+        result_df = result_df.merge(teams, 
+                    how='left', 
+                    left_on=['away_team_id', 'season_start', 'league'], 
+                    right_on=['id', 'season_end', 'league'],
+                    suffixes=('', '_away_team'))
+        
+        teams_columns_to_drop = set(teams.columns) - set(teams.select_dtypes(include=['number']).columns)
+
+        result_df = result_df.drop(columns=list(teams_columns_to_drop))
+        result_df = result_df.drop(columns=[col_name for col_name in result_df.columns if col_name.endswith('_away_team') or col_name.endswith('_home_team')])
+        
+        result_df
+        # # Вывод столбцов с пропусками и количество пропусков в процентах
+        # columns_with_nan = result_df.columns[result_df.isnull().any()].tolist()
+        # nan_percentage = result_df.isnull().mean() * 100
+
+        # for column in columns_with_nan:
+        #     print(f"Столбец '{column}' имеет {nan_percentage[column]:.2f}% пропусков")
+
+
+        return result_df
 
 
     @property

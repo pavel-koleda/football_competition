@@ -9,11 +9,11 @@ ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
 
 experiment_cfg = EasyDict()
 experiment_cfg.seed = 0
-experiment_cfg.num_epochs = 100
+experiment_cfg.num_epochs = 1000
 
 # Train parameters
 experiment_cfg.train = EasyDict()
-experiment_cfg.train.batch_size = 1024
+experiment_cfg.train.batch_size = 2048*2
 experiment_cfg.train.learning_rate = 1e-3
 experiment_cfg.train.continue_train = False
 experiment_cfg.train.checkpoint_from_epoch = None

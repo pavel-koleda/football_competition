@@ -6,13 +6,13 @@ model_cfg = EasyDict()
 
 # Layers configuration
 model_cfg.layers = [
-    {'type': LayerType.Linear, 'params': {'in_features': 961, 'out_features': 2048, 'bias': True}},
+    {'type': LayerType.Linear, 'params': {'in_features': 1626, 'out_features': 2048*2, 'bias': True}},  #961
     {'type': LayerType.ReLU, 'params': {}},
     {'type': LayerType.Dropout, 'params': {'p': 0.5}},
-    {'type': LayerType.Linear, 'params': {'in_features': 2048, 'out_features': 256, 'bias': True}},
+    {'type': LayerType.Linear, 'params': {'in_features': 2048*2, 'out_features': 256*2, 'bias': True}},
     {'type': LayerType.ReLU, 'params': {}},
     {'type': LayerType.Dropout, 'params': {'p': 0.5}},
-    {'type': LayerType.Linear, 'params': {'in_features': 256, 'out_features': 3, 'bias': True}},
+    {'type': LayerType.Linear, 'params': {'in_features': 256*2, 'out_features': 3, 'bias': True}},
 ]
 # Weights and bias initialization
 model_cfg.params = EasyDict()
