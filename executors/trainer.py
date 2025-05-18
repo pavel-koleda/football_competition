@@ -12,7 +12,7 @@ from models.mlp import MLP
 from utils.common_functions import set_seed
 from utils.enums import SetType
 from utils.logger import MLFlowLogger, NeptuneLogger
-from utils.metrics import balanced_accuracy_score, confusion_matrix
+from utils.metrics import balanced_accuracy_score, confusion_matrix, accuracy_score
 from utils.visualization import plot_confusion_matrix
 
 
@@ -126,10 +126,13 @@ class Trainer:
 
             predictions = output.argmax(axis=-1)
             balanced_accuracy = balanced_accuracy_score(batch['target'].numpy(), predictions)
+            accuracy = accuracy_score(batch['target'].numpy(), predictions)
 
             self.logger.save_metrics(SetType.train.name, 'loss', loss)
             self.logger.save_metrics(SetType.train.name, 'balanced_accuracy', balanced_accuracy)
-            pbar.set_description(f'Loss: {loss:.4f}, Train balanced accuracy: {balanced_accuracy:.4f}')
+            self.logger.save_metrics(SetType.train.name, 'accuracy', accuracy)
+
+            pbar.set_description(f'Loss: {loss:.4f}, Train accuracy: {accuracy:.4f}')
 
     def fit(self):
         """The main model training loop."""
@@ -175,6 +178,7 @@ class Trainer:
         all_targets = np.concatenate(all_labels)
 
         balanced_accuracy = balanced_accuracy_score(all_targets, all_predictions)
+        accuracy = accuracy_score(all_targets, all_predictions)
 
         cm_plot = plot_confusion_matrix(
             confusion_matrix(all_targets, all_predictions, self.config.data.classes_num),
@@ -184,6 +188,8 @@ class Trainer:
 
         self.logger.save_metrics('eval_' + set_type.name, 'loss', total_loss)
         self.logger.save_metrics('eval_' + set_type.name, 'balanced_accuracy', balanced_accuracy)
+        self.logger.save_metrics('eval_' + set_type.name, 'accuracy', accuracy)
+
         self.logger.save_plot('eval_' + set_type.name, 'confusion_matrix', cm_plot)
 
         return balanced_accuracy
@@ -214,7 +220,7 @@ class Trainer:
 
         for _ in range(self.config.overfit.num_iterations):
             loss_value, output = self.make_step(batch, update_model=True)
-            balanced_accuracy = balanced_accuracy_score(batch['target'], output.argmax(-1))
-            print(f"{loss_value}, {balanced_accuracy}")
+            accuracy = accuracy_score(batch['target'], output.argmax(-1))
+            print(f"{loss_value}, {accuracy}")
             self.logger.save_metrics(SetType.train.name, 'loss', loss_value)
-            self.logger.save_metrics(SetType.train.name, 'balanced_accuracy', balanced_accuracy)
+            self.logger.save_metrics(SetType.train.name, 'accuracy', accuracy)
