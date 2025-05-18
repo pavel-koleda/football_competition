@@ -187,4 +187,4 @@ class FootballDataset(Dataset):
         if self.set_type.name != 'test':
             return {'input': input.astype(np.float32), 'target': self._targets[idx]}
         else:
-            return {'input': input}
+            return {'input': input.astype(np.float32)}
