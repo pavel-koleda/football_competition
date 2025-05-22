@@ -6,7 +6,7 @@ model_cfg = EasyDict()
 
 # Layers configuration
 model_cfg.layers = [
-    {'type': LayerType.Linear, 'params': {'in_features': 1626, 'out_features': 2048*2, 'bias': True}},  #961
+    {'type': LayerType.Linear, 'params': {'in_features': 2529, 'out_features': 2048*2, 'bias': True}},  #961
     {'type': LayerType.ReLU, 'params': {}},
     {'type': LayerType.Dropout, 'params': {'p': 0.5}},
     {'type': LayerType.Linear, 'params': {'in_features': 2048*2, 'out_features': 256*2, 'bias': True}},

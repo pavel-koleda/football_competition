@@ -9,7 +9,7 @@ ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
 
 experiment_cfg = EasyDict()
 experiment_cfg.seed = 0
-experiment_cfg.num_epochs = 1000
+experiment_cfg.num_epochs = 500
 
 # Train parameters
 experiment_cfg.train = EasyDict()
@@ -50,7 +50,7 @@ experiment_cfg.mlflow.dependencies_path = os.path.join(ROOT_DIR, 'requirements.t
 experiment_cfg.checkpoints_dir = os.path.join(
     ROOT_DIR, 'experiments', experiment_cfg.neptune.experiment_name, 'checkpoints'
 )
-experiment_cfg.checkpoint_save_frequency = 1
+experiment_cfg.checkpoint_save_frequency = 10
 experiment_cfg.checkpoint_name = 'checkpoint_%s'
 experiment_cfg.best_checkpoint_name = 'best_checkpoint'
 

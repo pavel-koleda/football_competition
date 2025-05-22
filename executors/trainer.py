@@ -12,7 +12,8 @@ from models.mlp import MLP
 from utils.common_functions import set_seed
 from utils.enums import SetType
 from utils.logger import MLFlowLogger, NeptuneLogger
-from utils.metrics import balanced_accuracy_score, confusion_matrix, accuracy_score
+from utils.metrics import (accuracy_score, balanced_accuracy_score,
+                           confusion_matrix)
 from utils.visualization import plot_confusion_matrix
 
 

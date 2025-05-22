@@ -33,19 +33,48 @@ class FootballDataset(Dataset):
 
         matches = self.drop_matches_columns(matches)
         matches = self.drop_matches_2013_season(matches)
-
+        
         self.add_season_start_end_index(matches, players, teams)
         matches = self.add_players_info(matches, players)
         matches = self.add_teams_info(matches, teams)
         
         matches = self.ohe_features_encode(self.config.categories, matches)
-       
+
+        # matches = self.ohe_features_encode({'referee': matches['referee'].unique()}, matches)
+
+        matches = self.add_date_features(matches)
+
+        # Преобразование категориальных столбцов в числовые
+        for col in matches.select_dtypes(['category']).columns:
+            matches[col] = matches[col].cat.codes
+
         if self.set_type.name != 'test':
             self._targets = matches['match_result'].map(self.config.label_mapping).to_numpy()
             matches = matches.drop(columns=['match_result'])
 
         matches = matches.fillna(0)
         
+        print(matches.shape)
+        
+        # Подсчет столбцов с префиксами "home_team_" и "away_team_"
+        home_team_columns = [col for col in matches.columns if col.startswith('home_team_')]
+        away_team_columns = [col for col in matches.columns if col.startswith('away_team_')]
+
+        print(f"Количество столбцов с префиксом 'home_team_': {len(home_team_columns)}")
+        print(f"Количество столбцов с префиксом 'away_team_': {len(away_team_columns)}")
+
+
+        # # Вычитание значений столбцов "away_team_" из соответствующих столбцов "home_team_"
+        # for home_col in home_team_columns:
+        #     away_col = home_col.replace('home_team_', 'away_team_')
+        #     if away_col in matches.columns:
+        #         matches[home_col] = matches[home_col] - matches[away_col]
+
+        # # Удаление столбцов "away_team_"
+        # matches = matches.drop(columns=away_team_columns)
+
+        print(matches.shape)
+
         matches = matches.to_numpy(dtype='float')
 
         matches = self.preprocessing.train(matches)
@@ -84,8 +113,8 @@ class FootballDataset(Dataset):
                                         'away_team_name', 
                                         'home_team_bench_players', 
                                         'away_team_bench_players', 
-                                        'attendance', 
-                                        'referee',
+                                        # 'attendance', 
+                                        # 'referee',
                                         'timestamp'])
 
         if self.set_type.name != 'test':
@@ -155,27 +184,49 @@ class FootballDataset(Dataset):
         result_df[numerical_features.columns] = result_df[numerical_features.columns].fillna(mean_values)
 
         return result_df
-
+        pd.mer
 
     def add_teams_info(self, matches, teams) -> pd.DataFrame:
         #заменяем id команды информацией о ней
-        result_df = matches.merge(teams, 
+        home_teams = teams.copy()
+        home_teams = home_teams.add_prefix('home_team_')
+
+        result_df = matches.merge(home_teams, 
                     how='left', 
                     left_on=['home_team_id', 'season_start', 'league'], 
-                    right_on=['id', 'season_end', 'league'],
+                    right_on=['home_team_id', 'home_team_season_end', 'home_team_league'],
                     suffixes=('', '_home_team'))
-        result_df = result_df.merge(teams, 
+        
+        away_teams = teams.copy()
+        away_teams = away_teams.add_prefix('away_team_')
+        result_df = result_df.merge(away_teams, 
                     how='left', 
                     left_on=['away_team_id', 'season_start', 'league'], 
-                    right_on=['id', 'season_end', 'league'],
+                    right_on=['away_team_id', 'away_team_season_end', 'away_team_league'],
                     suffixes=('', '_away_team'))
         
-        teams_columns_to_drop = set(teams.columns) - set(teams.select_dtypes(include=['number']).columns)
-
-        result_df = result_df.drop(columns=list(teams_columns_to_drop))
-        result_df = result_df.drop(columns=[col_name for col_name in result_df.columns if col_name.endswith('_away_team') or col_name.endswith('_home_team')])
         
-        result_df
+        result_df = result_df.drop(columns=['home_team_league', 'home_team_season_start', 'home_team_season_end', 
+                                            'away_team_league', 'away_team_season_start', 'away_team_season_end', 
+                                            'home_team_country', 'away_team_country'])
+
+        # result_df = self.ohe_features_encode({'home_team_country': self.config.categories['country'], 
+        #                                       'away_team_country': self.config.categories['country']}, 
+        #                                       result_df)
+        
+        
+        # print(result_df['away_team_country_Monaco'].head())
+        # print(result_df.select_dtypes(exclude=['number', 'category']).columns)
+
+        # home_teams_columns_to_drop = set(home_teams.columns) - set(home_teams.select_dtypes(include=['number']).columns)
+        # away_teams_columns_to_drop = set(away_teams.columns) - set(away_teams.select_dtypes(include=['number']).columns)
+
+        # result_df = result_df.drop(columns=list(set(result_df.columns) - set(home_teams_columns_to_drop)))
+        # result_df = result_df.drop(columns=list(set(result_df.columns) - set(away_teams_columns_to_drop)))
+
+
+        # result_df = result_df.drop(columns=[col_name for col_name in result_df.columns if col_name.endswith('_away_team') or col_name.endswith('_home_team')])
+        
         # # Вывод столбцов с пропусками и количество пропусков в процентах
         # columns_with_nan = result_df.columns[result_df.isnull().any()].tolist()
         # nan_percentage = result_df.isnull().mean() * 100
@@ -185,6 +236,27 @@ class FootballDataset(Dataset):
 
 
         return result_df
+    
+
+    def add_date_features(self, matches) -> pd.DataFrame:
+
+        matches['day'] = matches['match_date'].dt.day
+        matches['month'] = matches['match_date'].dt.month
+        matches['year'] = matches['match_date'].dt.year
+
+        
+        matches['day_of_week'] = matches['match_date'].dt.dayofweek
+        matches['day_of_year'] = matches['match_date'].dt.dayofyear
+        matches['quarter'] = matches['match_date'].dt.quarter
+
+        
+        matches['day_sin'] = np.sin(2 * np.pi * matches['day'] / 31)
+        matches['day_cos'] = np.cos(2 * np.pi * matches['day'] / 31)
+        matches['month_sin'] = np.sin(2 * np.pi * matches['month'] / 12)
+        matches['month_cos'] = np.cos(2 * np.pi * matches['month'] / 12)
+
+           
+        return matches
 
 
     @property
